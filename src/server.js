@@ -189,41 +189,6 @@ app.post('/push-ingredients', async (req, res) => {
   res.json({ success: true, added: newIngredients.length });
 });
 
-// ── Debug route ───────────────────────────────────────────────────────────────
-app.post('/debug/test-patch', async (req, res) => {
-  const { mealieUrl, token, slug } = req.body;
-  if (!mealieUrl || !token || !slug) return res.json({ error: 'Missing fields' });
-
-  const getResult = await mealieRequest('GET', mealieUrl, token, `/recipes/${slug}`, null);
-  let recipe;
-  try { recipe = JSON.parse(getResult.body); }
-  catch (e) { return res.json({ get_status: getResult.status, parse_error: getResult.body.slice(0,300) }); }
-
-  // Resolve a real food id for the test ingredient
-  const food = await resolveFood(mealieUrl, token, 'test-debug-delete-me');
-
-  const testIng = {
-    quantity: 1, unit: null,
-    food: food || null,
-    note: '', display: 'test-debug-delete-me',
-    title: '', originalText: 'test-debug-delete-me',
-    referenceId: uuidv4(), referencedRecipe: null
-  };
-
-  const patch = await mealieRequest('PATCH', mealieUrl, token, `/recipes/${slug}`, {
-    ...recipe,
-    recipeIngredient: [...(recipe.recipeIngredient || []), testIng]
-  });
-
-  res.json({
-    get_status: getResult.status,
-    existing_count: (recipe.recipeIngredient || []).length,
-    sample: recipe.recipeIngredient?.[0] || null,
-    food_resolved: food,
-    patch_status: patch.status,
-    patch_body: patch.body.slice(0, 500)
-  });
-});
 
 app.listen(PORT, () => {
   console.log(`Mealie Ingredient Pusher running on http://localhost:${PORT}`);
