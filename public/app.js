@@ -148,10 +148,24 @@ async function testConnection() {
   result.innerHTML = '';
 
   try {
-    const res = await fetch('/mealie-api/users/self', { headers: getMealieHeaders() });
+    // Try v1 path first, then fallback to older path
+    let res = await fetch('/mealie-api/users/self', { headers: getMealieHeaders() });
+    if (res.status === 404) {
+      res = await fetch('/mealie-api/user/self', { headers: getMealieHeaders() });
+    }
     if (res.ok) {
       const data = await res.json();
-      result.innerHTML = `<span class="test-ok">✓ Connected as ${esc(data.fullName || data.username || 'user')}</span>`;
+      result.innerHTML = `<span class="test-ok">✓ Connected as ${esc(data.fullName || data.username || data.email || 'user')}</span>`;
+    } else if (res.status === 401 || res.status === 403) {
+      result.innerHTML = `<span class="test-err">✗ HTTP ${res.status} — token invalid or expired.</span>`;
+    } else if (res.status === 404) {
+      // 404 on user endpoint might just mean different Mealie version — try a recipes ping
+      const res2 = await fetch('/mealie-api/recipes?page=1&perPage=1', { headers: getMealieHeaders() });
+      if (res2.ok) {
+        result.innerHTML = `<span class="test-ok">✓ Connected to Mealie successfully</span>`;
+      } else {
+        result.innerHTML = `<span class="test-err">✗ HTTP ${res2.status} — check your Mealie URL.</span>`;
+      }
     } else {
       result.innerHTML = `<span class="test-err">✗ HTTP ${res.status} — check your URL and token.</span>`;
     }
