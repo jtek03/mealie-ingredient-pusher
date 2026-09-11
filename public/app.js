@@ -7,6 +7,21 @@ function uuidv4() {
   });
 }
 
+// ── Theme ─────────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+  html.dataset.theme = next;
+  document.getElementById('theme-icon').textContent = next === 'dark' ? '☀️' : '🌙';
+  localStorage.setItem('mip-theme', next);
+}
+function loadTheme() {
+  const saved = localStorage.getItem('mip-theme') ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  document.documentElement.dataset.theme = saved;
+  document.getElementById('theme-icon').textContent = saved === 'dark' ? '☀️' : '🌙';
+}
+
 // ── Persistence ───────────────────────────────────────────────────────────────
 function save() {
   localStorage.setItem('mip-url', document.getElementById('mealie-url').value);
@@ -25,7 +40,15 @@ document.getElementById('recipe-slug').addEventListener('blur', function () {
   if (val.includes('/')) { this.value = val.split('/').filter(Boolean).pop(); save(); }
 });
 
-// ── Parser ────────────────────────────────────────────────────────────────────
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  ['ingredients','instructions'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === name);
+    document.getElementById('pane-' + t).style.display = t === name ? '' : 'none';
+  });
+}
+
+// ── Ingredient parser ─────────────────────────────────────────────────────────
 const UNITS = [
   'tablespoon','tablespoons','teaspoon','teaspoons',
   'tbsp','tsp','cup','cups','fl oz','oz','lb','lbs','g','kg','mg','ml','l','liter','liters',
@@ -71,6 +94,15 @@ function parseAll() {
     .map(parseIngredient).filter(Boolean);
 }
 
+// ── Instruction parser ────────────────────────────────────────────────────────
+function parseInstructions() {
+  const raw = document.getElementById('raw-instructions').value;
+  return raw.split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+    .map((text, i) => ({ id: uuidv4(), title: '', text, summary: '' }));
+}
+
 // ── Preview ───────────────────────────────────────────────────────────────────
 function previewParse() {
   const parsed = parseAll();
@@ -78,8 +110,8 @@ function previewParse() {
   if (!parsed.length) { area.innerHTML = ''; return; }
   const rows = parsed.map(p => `<tr>
     <td>${esc(p.display)}</td>
-    <td>${p.quantity > 0 ? p.quantity : '<span style="color:#9E9E9E">—</span>'}</td>
-    <td>${p.unit ? esc(p.unit) : '<span style="color:#9E9E9E">—</span>'}</td>
+    <td>${p.quantity > 0 ? p.quantity : '<span style="color:var(--text-muted)">—</span>'}</td>
+    <td>${p.unit ? esc(p.unit) : '<span style="color:var(--text-muted)">—</span>'}</td>
     <td class="food">${esc(p.food) || '⚠ check'}</td>
   </tr>`).join('');
   area.innerHTML = `
@@ -90,7 +122,7 @@ function previewParse() {
     <p class="hint" style="margin-top:8px">${parsed.length} ingredient${parsed.length!==1?'s':''} parsed. Check the Food column before pushing.</p>`;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── API helpers ───────────────────────────────────────────────────────────────
 function getMealieHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -127,22 +159,30 @@ async function testConnection() {
   label.textContent = 'Test connection'; btn.disabled = false;
 }
 
-// ── Push — via server-side /push-ingredients endpoint ────────────────────────
+// ── Push ──────────────────────────────────────────────────────────────────────
 async function pushAll() {
   const slug = document.getElementById('recipe-slug').value.trim().split('/').filter(Boolean).pop();
   const mealieUrl = document.getElementById('mealie-url').value.replace(/\/$/, '');
   const token = document.getElementById('api-token').value.trim();
+  const pushIngredients = document.getElementById('push-ingredients-cb').checked;
+  const pushInstructions = document.getElementById('push-instructions-cb').checked;
   const pushBtn = document.getElementById('push-btn');
-  const previewArea = document.getElementById('preview-area');
 
   if (!mealieUrl || !token || !slug) {
-    previewArea.innerHTML = '<p style="color:#E53935;font-size:13px;margin-top:8px">Fill in connection details and a recipe slug first.</p>';
-    return;
+    alert('Fill in your Mealie URL, API token, and recipe slug first.'); return;
   }
-  const parsed = parseAll();
-  if (!parsed.length) {
-    previewArea.innerHTML = '<p style="color:#E53935;font-size:13px;margin-top:8px">No ingredients found — paste some first.</p>';
-    return;
+  if (!pushIngredients && !pushInstructions) {
+    alert('Select at least one of Ingredients or Instructions.'); return;
+  }
+
+  const ingredients = pushIngredients ? parseAll() : [];
+  const instructions = pushInstructions ? parseInstructions() : [];
+
+  if (pushIngredients && !ingredients.length) {
+    alert('No ingredients found — paste some in the Ingredients tab first.'); return;
+  }
+  if (pushInstructions && !instructions.length) {
+    alert('No instructions found — paste some in the Instructions tab first.'); return;
   }
 
   pushBtn.disabled = true;
@@ -154,39 +194,39 @@ async function pushAll() {
   list.innerHTML = '';
   resultsCard.style.display = 'block';
   resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  summary.textContent = 'Working…';
 
   try {
-    summary.textContent = 'Sending to Mealie…';
-
     const res = await fetch('/push-ingredients', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mealieUrl, token, slug, ingredients: parsed })
+      body: JSON.stringify({ mealieUrl, token, slug, ingredients, instructions })
     });
-
     const data = await res.json();
 
     if (!res.ok || data.error) {
-      const li = document.createElement('li');
-      li.className = 'status-item err';
-      li.innerHTML = `<span class="status-icon">✗</span><div>${esc(data.error || 'Unknown error')}<div class="status-detail">${esc(data.detail || '')}</div></div>`;
-      list.appendChild(li);
+      addResult('err', '✗', data.error || 'Unknown error', data.detail || '');
       summary.textContent = 'Failed';
     } else {
-      parsed.forEach(p => {
-        const li = document.createElement('li');
-        li.className = 'status-item ok';
-        const detail = [p.quantity || '', p.unit || '', p.food].filter(Boolean).join(' ');
-        li.innerHTML = `<span class="status-icon">✓</span><div><div>${esc(p.display)}</div><div class="status-detail">→ ${esc(detail)}</div></div>`;
-        list.appendChild(li);
-      });
-      summary.textContent = `${data.added} ingredient${data.added !== 1 ? 's' : ''} added`;
+      if (data.ingredientsAdded > 0) {
+        addResult('ok', '✓', `${data.ingredientsAdded} ingredient${data.ingredientsAdded !== 1 ? 's' : ''} added`, '');
+      }
+      if (data.instructionsAdded > 0) {
+        addResult('ok', '✓', `${data.instructionsAdded} instruction step${data.instructionsAdded !== 1 ? 's' : ''} added`, '');
+      }
+
+      const parts = [];
+      if (data.ingredientsAdded > 0) parts.push(`${data.ingredientsAdded} ingredient${data.ingredientsAdded!==1?'s':''}`);
+      if (data.instructionsAdded > 0) parts.push(`${data.instructionsAdded} step${data.instructionsAdded!==1?'s':''}`);
+      summary.textContent = parts.join(' + ') + ' added';
+
+      // Show link to recipe
+      const link = document.getElementById('recipe-link');
+      link.href = `${mealieUrl}/r/${slug}`;
+      link.style.display = 'inline-flex';
     }
   } catch (e) {
-    const li = document.createElement('li');
-    li.className = 'status-item err';
-    li.innerHTML = `<span class="status-icon">✗</span><div>${esc(e.message)}</div>`;
-    list.appendChild(li);
+    addResult('err', '✗', e.message, '');
     summary.textContent = 'Failed';
   }
 
@@ -194,13 +234,27 @@ async function pushAll() {
   pushBtn.textContent = 'Push to Mealie';
 }
 
+function addResult(cls, icon, text, detail) {
+  const list = document.getElementById('status-list');
+  const li = document.createElement('li');
+  li.className = `status-item ${cls}`;
+  li.innerHTML = `<em class="status-icon">${icon}</em><div><div>${esc(text)}</div>${detail ? `<div class="status-detail">${esc(detail)}</div>` : ''}</div>`;
+  list.appendChild(li);
+}
+
 function resetResults() {
   document.getElementById('results-card').style.display = 'none';
   document.getElementById('status-list').innerHTML = '';
   document.getElementById('raw-ingredients').value = '';
+  document.getElementById('raw-instructions').value = '';
   document.getElementById('preview-area').innerHTML = '';
+  document.getElementById('recipe-link').style.display = 'none';
 }
+
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+// Init
+loadTheme();
 load();
