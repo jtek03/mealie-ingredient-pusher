@@ -1,0 +1,17 @@
+{
+  "name": "mealie-ingredient-pusher",
+  "version": "1.0.0",
+  "description": "A simple web UI to bulk-push ingredients to Mealie recipes via the API",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "http-proxy-middleware": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
