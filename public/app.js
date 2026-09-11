@@ -1,3 +1,10 @@
+function uuidv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 'use strict';
 
 // ── Persistence ───────────────────────────────────────────────────────────────
@@ -215,7 +222,7 @@ async function pushAll() {
       disableAmount: !p.quantity,
       display: p.display,
       title: null,
-      referenceId: crypto.randomUUID()
+      referenceId: uuidv4()
     }));
 
     // Step 3: PATCH recipe with combined ingredient list
