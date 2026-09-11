@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mealie Ingredient Pusher</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="logo">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="28" height="28" rx="8" fill="#4CAF50"/>
+          <path d="M14 6C14 6 8 10 8 15.5C8 18.985 10.686 21.5 14 21.5C17.314 21.5 20 18.985 20 15.5C20 10 14 6 14 6Z" fill="white" opacity="0.9"/>
+          <path d="M14 10C14 10 10.5 13 10.5 15.5C10.5 17.43 12.07 19 14 19C15.93 19 17.5 17.43 17.5 15.5C17.5 13 14 10 14 10Z" fill="#4CAF50"/>
+        </svg>
+        <span>Mealie Ingredient Pusher</span>
+      </div>
+    </header>
+
+    <main>
+      <div class="card" id="config-card">
+        <h2>Connection</h2>
+        <div class="field-row">
+          <div class="field">
+            <label for="mealie-url">Mealie URL</label>
+            <input type="text" id="mealie-url" placeholder="https://mealie.yourdomain.com" autocomplete="off" />
+            <span class="hint">Base URL — no trailing slash</span>
+          </div>
+          <div class="field">
+            <label for="api-token">API Token</label>
+            <input type="password" id="api-token" placeholder="eyJ..." autocomplete="off" />
+            <span class="hint">Profile → API Tokens in Mealie</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="recipe-slug">Recipe Slug</label>
+          <input type="text" id="recipe-slug" placeholder="breakfast-sausage" autocomplete="off" />
+          <span class="hint">Last part of the URL — e.g. /r/<strong>breakfast-sausage</strong>. Paste the full URL and we'll extract it.</span>
+        </div>
+        <button class="btn-test" id="test-btn" onclick="testConnection()">
+          <span id="test-label">Test connection</span>
+        </button>
+        <div id="test-result"></div>
+      </div>
+
+      <div class="card" id="ingredients-card">
+        <h2>Ingredients</h2>
+        <p class="sub">Paste in any format — we handle both <code>Thyme (1 tbsp)</code> and <code>1 tbsp Thyme</code>.</p>
+        <textarea id="raw-ingredients" placeholder="Examples:
+80/20 Ground Pork (1lb)
+Thyme (1 tbsp)
+Sage (7-8 leaves)
+1/2 tsp Smoked Paprika
+2 cloves Garlic"></textarea>
+        <div class="actions">
+          <button class="btn-secondary" onclick="previewParse()">Preview parse</button>
+          <button class="btn-primary" id="push-btn" onclick="pushAll()">Push to Mealie</button>
+        </div>
+        <div id="preview-area"></div>
+      </div>
+
+      <div class="card" id="results-card" style="display:none">
+        <div class="results-header">
+          <h2>Results</h2>
+          <span id="results-summary"></span>
+        </div>
+        <ul id="status-list"></ul>
+        <button class="btn-secondary" onclick="resetResults()" style="margin-top:1rem">Push more ingredients</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
