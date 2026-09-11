@@ -88,50 +88,97 @@ app.use('/mealie-api', (req, res) => {
   proxyReq.end();
 });
 
+// ── Push ingredients endpoint ─────────────────────────────────────────────────
+// Handles the full GET → merge → PATCH flow server-side so the browser
+// never has to deal with the large recipe payload.
+app.post('/push-ingredients', async (req, res) => {
+  const { mealieUrl, token, slug, ingredients } = req.body;
+  if (!mealieUrl || !token || !slug || !ingredients) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // 1. GET existing recipe
+  const getResult = await mealieRequest('GET', mealieUrl, token, `/recipes/${slug}`, null);
+  if (getResult.status !== 200) {
+    return res.status(getResult.status).json({ error: `Could not fetch recipe: HTTP ${getResult.status}`, detail: getResult.body.slice(0, 200) });
+  }
+
+  let recipe;
+  try { recipe = JSON.parse(getResult.body); }
+  catch (e) { return res.status(500).json({ error: 'Could not parse recipe response' }); }
+
+  // 2. Build new ingredients in Mealie's exact format (from sample_existing_ingredient)
+  function uuidv4() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+
+  const newIngredients = ingredients.map(p => ({
+    quantity: p.quantity > 0 ? p.quantity : null,
+    unit: p.unit ? { name: p.unit } : null,
+    food: p.food ? { name: p.food } : null,
+    note: '',
+    display: p.display || '',
+    title: '',
+    originalText: p.display || '',
+    referenceId: uuidv4(),
+    referencedRecipe: null
+  }));
+
+  // 3. Keep existing ingredients exactly as-is, append new ones
+  const existingIngredients = recipe.recipeIngredient || [];
+  const merged = [...existingIngredients, ...newIngredients];
+
+  // 4. PATCH with full recipe to avoid Mealie's ValueError on partial updates
+  const patchResult = await mealieRequest('PATCH', mealieUrl, token, `/recipes/${slug}`, {
+    ...recipe,
+    recipeIngredient: merged
+  });
+
+  if (patchResult.status >= 400) {
+    return res.status(patchResult.status).json({
+      error: `PATCH failed: HTTP ${patchResult.status}`,
+      detail: patchResult.body.slice(0, 500)
+    });
+  }
+
+  res.json({ success: true, added: newIngredients.length });
+});
+
 // ── Debug route ───────────────────────────────────────────────────────────────
 app.post('/debug/test-patch', async (req, res) => {
   const { mealieUrl, token, slug } = req.body;
-  if (!mealieUrl || !token || !slug) {
-    return res.json({ error: 'Missing mealieUrl, token, or slug' });
-  }
+  if (!mealieUrl || !token || !slug) return res.json({ error: 'Missing fields' });
 
   const results = {};
-
-  // 1. GET recipe
   const getResult = await mealieRequest('GET', mealieUrl, token, `/recipes/${slug}`, null);
   results.get_status = getResult.status;
 
   let recipe;
   try { recipe = JSON.parse(getResult.body); }
-  catch (e) { return res.json({ ...results, get_parse_error: getResult.body.slice(0, 300) }); }
+  catch (e) { return res.json({ ...results, parse_error: getResult.body.slice(0,300) }); }
 
-  results.recipe_keys = Object.keys(recipe);
-  results.existing_ingredient_count = (recipe.recipeIngredient || []).length;
-  if (recipe.recipeIngredient && recipe.recipeIngredient[0]) {
-    results.sample_existing_ingredient = recipe.recipeIngredient[0];
-  }
+  results.existing_count = (recipe.recipeIngredient || []).length;
+  results.sample = recipe.recipeIngredient?.[0] || null;
 
-  // 2. PATCH with only recipeIngredient (minimal new ingredient)
-  const minIng = {
+  // Try PATCH with full recipe + one new ingredient in exact Mealie format
+  const testIng = {
     quantity: 1, unit: null,
     food: { name: 'test-debug-delete-me' },
-    note: '', isFood: true, disableAmount: false,
-    display: 'test-debug-delete-me', title: null,
-    referenceId: '00000000-0000-4000-a000-000000000001'
+    note: '', display: 'test-debug-delete-me',
+    title: '', originalText: 'test-debug-delete-me',
+    referenceId: '00000000-0000-4000-a000-000000000001',
+    referencedRecipe: null
   };
 
-  const patch1 = await mealieRequest('PATCH', mealieUrl, token, `/recipes/${slug}`,
-    { recipeIngredient: [minIng] });
-  results.patch_minimal_status = patch1.status;
-  results.patch_minimal_body = patch1.body.slice(0, 500);
-
-  // 3. If PATCH fails, try PUT with full recipe body
-  if (patch1.status >= 400) {
-    const put1 = await mealieRequest('PUT', mealieUrl, token, `/recipes/${slug}`,
-      { ...recipe, recipeIngredient: [...(recipe.recipeIngredient || []), minIng] });
-    results.put_full_status = put1.status;
-    results.put_full_body = put1.body.slice(0, 500);
-  }
+  const patch = await mealieRequest('PATCH', mealieUrl, token, `/recipes/${slug}`, {
+    ...recipe,
+    recipeIngredient: [...(recipe.recipeIngredient || []), testIng]
+  });
+  results.patch_status = patch.status;
+  results.patch_body = patch.body.slice(0, 500);
 
   res.json(results);
 });
