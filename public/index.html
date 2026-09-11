@@ -17,14 +17,14 @@
         </svg>
         <span>Mealie Pusher</span>
       </div>
-      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+      <button class="theme-toggle" id="theme-toggle-btn" aria-label="Toggle dark mode">
         <span id="theme-icon">🌙</span>
       </button>
     </header>
 
     <main>
       <!-- Connection -->
-      <section class="card" id="config-card">
+      <section class="card">
         <h2>Connection</h2>
         <div class="field-row">
           <div class="field">
@@ -44,21 +44,18 @@
           <span class="hint">Last part of the URL after /r/ — paste the full URL and we'll extract it.</span>
         </div>
         <div class="config-footer">
-          <button class="btn-secondary" id="test-btn" onclick="testConnection()">
-            <span id="test-label">Test connection</span>
-          </button>
+          <button class="btn-secondary" id="test-btn">Test connection</button>
           <span id="test-result"></span>
         </div>
       </section>
 
-      <!-- Tabs -->
-      <section class="card" id="content-card">
+      <!-- Content tabs -->
+      <section class="card">
         <div class="tabs">
-          <button class="tab active" id="tab-ingredients" onclick="switchTab('ingredients')">Ingredients</button>
-          <button class="tab" id="tab-instructions" onclick="switchTab('instructions')">Instructions</button>
+          <button class="tab active" data-tab="ingredients">Ingredients</button>
+          <button class="tab" data-tab="instructions">Instructions</button>
         </div>
 
-        <!-- Ingredients pane -->
         <div id="pane-ingredients" class="pane">
           <p class="sub">Paste in any format — <code>Thyme (1 tbsp)</code> or <code>1 tbsp Thyme</code> both work.</p>
           <textarea id="raw-ingredients" placeholder="80/20 Ground Pork (1lb)
@@ -70,27 +67,22 @@ Cayenne Pepper (¼ tsp)
 Fennel Seeds (2 tsp)
 Salt (2 tsp)"></textarea>
           <div class="pane-actions">
-            <button class="btn-secondary" onclick="previewParse()">Preview parse</button>
+            <button class="btn-secondary" id="preview-btn">Preview parse</button>
           </div>
           <div id="preview-area"></div>
         </div>
 
-        <!-- Instructions pane -->
         <div id="pane-instructions" class="pane" style="display:none">
-          <p class="sub">One step per line. Blank lines between steps are fine — we'll clean them up.</p>
+          <p class="sub">One step per line. Blank lines are ignored.</p>
           <textarea id="raw-instructions" placeholder="Combine all dry spices in a small bowl and mix well.
-
-Add ground pork to a large bowl. Pour spice mixture over pork.
-
+Add ground pork to a large bowl and pour spice mixture over pork.
 Mix thoroughly by hand until spices are evenly distributed.
-
 Form into patties about ½ inch thick.
-
 Cook in a skillet over medium heat for 4-5 minutes per side until cooked through."></textarea>
         </div>
       </section>
 
-      <!-- Push button -->
+      <!-- Push -->
       <div class="push-row">
         <div class="push-options">
           <label class="checkbox-label">
@@ -102,7 +94,7 @@ Cook in a skillet over medium heat for 4-5 minutes per side until cooked through
             Instructions
           </label>
         </div>
-        <button class="btn-primary" id="push-btn" onclick="pushAll()">Push to Mealie</button>
+        <button class="btn-primary" id="push-btn">Push to Mealie</button>
       </div>
 
       <!-- Results -->
@@ -113,7 +105,7 @@ Cook in a skillet over medium heat for 4-5 minutes per side until cooked through
         </div>
         <ul id="status-list"></ul>
         <div class="results-footer">
-          <button class="btn-secondary" onclick="resetResults()">Clear &amp; start over</button>
+          <button class="btn-secondary" id="reset-btn">Clear &amp; start over</button>
           <a id="recipe-link" href="#" target="_blank" class="btn-secondary recipe-link" style="display:none">Open in Mealie →</a>
         </div>
       </section>
