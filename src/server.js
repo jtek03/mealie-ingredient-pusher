@@ -47,9 +47,7 @@ function mealieRequest(method, mealieBase, token, apiPath, body) {
   });
 }
 
-// Look up a food by name, create it if it doesn't exist, return its id
 async function resolveFood(mealieBase, token, name) {
-  // Search existing foods
   const search = await mealieRequest('GET', mealieBase, token, `/foods?search=${encodeURIComponent(name)}&perPage=10`, null);
   if (search.status === 200) {
     try {
@@ -59,40 +57,29 @@ async function resolveFood(mealieBase, token, name) {
       if (match) return { id: match.id, name: match.name };
     } catch(e) {}
   }
-
-  // Create it
   const create = await mealieRequest('POST', mealieBase, token, '/foods', { name });
   if (create.status === 200 || create.status === 201) {
-    try {
-      const food = JSON.parse(create.body);
-      return { id: food.id, name: food.name };
-    } catch(e) {}
+    try { const food = JSON.parse(create.body); return { id: food.id, name: food.name }; } catch(e) {}
   }
-
   return null;
 }
 
-// Look up a unit by name, create if needed, return its id
 async function resolveUnit(mealieBase, token, name) {
   const search = await mealieRequest('GET', mealieBase, token, `/units?search=${encodeURIComponent(name)}&perPage=10`, null);
   if (search.status === 200) {
     try {
       const data = JSON.parse(search.body);
       const items = data.items || data;
-      const match = items.find(u => u.name.toLowerCase() === name.toLowerCase() || (u.abbreviation || '').toLowerCase() === name.toLowerCase());
+      const match = items.find(u =>
+        u.name.toLowerCase() === name.toLowerCase() ||
+        (u.abbreviation || '').toLowerCase() === name.toLowerCase());
       if (match) return { id: match.id, name: match.name };
     } catch(e) {}
   }
-
-  // Create it
   const create = await mealieRequest('POST', mealieBase, token, '/units', { name });
   if (create.status === 200 || create.status === 201) {
-    try {
-      const unit = JSON.parse(create.body);
-      return { id: unit.id, name: unit.name };
-    } catch(e) {}
+    try { const unit = JSON.parse(create.body); return { id: unit.id, name: unit.name }; } catch(e) {}
   }
-
   return null;
 }
 
@@ -103,8 +90,6 @@ app.use('/mealie-api', (req, res) => {
   if (!mealieBase) return res.status(400).json({ error: 'Missing X-Mealie-Url header' });
 
   const fullUrl = `${mealieBase}/api${req.path}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`;
-  console.log(`[proxy] ${req.method} ${fullUrl}`);
-
   let targetUrl;
   try { targetUrl = new URL(fullUrl); }
   catch (e) { return res.status(400).json({ error: 'Invalid URL' }); }
@@ -122,13 +107,12 @@ app.use('/mealie-api', (req, res) => {
     },
     rejectUnauthorized: false
   };
-
   const proxyReq = transport.request(opts, (proxyRes) => {
     res.status(proxyRes.statusCode);
     res.set('Content-Type', proxyRes.headers['content-type'] || 'application/json');
     proxyRes.pipe(res);
   });
-  proxyReq.on('error', (err) => res.status(502).json({ error: err.message }));
+  proxyReq.on('error', err => res.status(502).json({ error: err.message }));
   if (req.body && Object.keys(req.body).length > 0) {
     const body = JSON.stringify(req.body);
     proxyReq.setHeader('Content-Length', Buffer.byteLength(body));
@@ -137,28 +121,29 @@ app.use('/mealie-api', (req, res) => {
   proxyReq.end();
 });
 
-// ── Push ingredients (server-side: resolve foods/units → PATCH recipe) ────────
+// ── Push endpoint ─────────────────────────────────────────────────────────────
 app.post('/push-ingredients', async (req, res) => {
-  const { mealieUrl, token, slug, ingredients } = req.body;
-  if (!mealieUrl || !token || !slug || !ingredients) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  const { mealieUrl, token, slug, ingredients = [], instructions = [] } = req.body;
+  if (!mealieUrl || !token || !slug) {
+    return res.status(400).json({ error: 'Missing mealieUrl, token, or slug' });
   }
 
-  // 1. GET existing recipe
+  // GET existing recipe
   const getResult = await mealieRequest('GET', mealieUrl, token, `/recipes/${slug}`, null);
   if (getResult.status !== 200) {
-    return res.status(getResult.status).json({ error: `Could not fetch recipe: HTTP ${getResult.status}` });
+    return res.status(getResult.status).json({
+      error: `Could not fetch recipe — HTTP ${getResult.status}. Check the slug is correct.`
+    });
   }
   let recipe;
   try { recipe = JSON.parse(getResult.body); }
   catch (e) { return res.status(500).json({ error: 'Could not parse recipe response' }); }
 
-  // 2. Resolve each ingredient's food and unit to get IDs
+  // Resolve ingredients — look up/create food & unit IDs
   const newIngredients = [];
   for (const p of ingredients) {
     const food = p.food ? await resolveFood(mealieUrl, token, p.food) : null;
     const unit = p.unit ? await resolveUnit(mealieUrl, token, p.unit) : null;
-
     newIngredients.push({
       quantity: p.quantity > 0 ? p.quantity : null,
       unit: unit || null,
@@ -172,11 +157,23 @@ app.post('/push-ingredients', async (req, res) => {
     });
   }
 
-  // 3. PATCH with full recipe + new ingredients appended
-  const merged = [...(recipe.recipeIngredient || []), ...newIngredients];
+  // Build instruction steps
+  const newInstructions = instructions.map(step => ({
+    id: uuidv4(),
+    title: step.title || '',
+    text: step.text || '',
+    summary: ''
+  }));
+
+  // Merge with existing
+  const mergedIngredients = [...(recipe.recipeIngredient || []), ...newIngredients];
+  const mergedInstructions = [...(recipe.recipeInstructions || []), ...newInstructions];
+
+  // PATCH
   const patchResult = await mealieRequest('PATCH', mealieUrl, token, `/recipes/${slug}`, {
     ...recipe,
-    recipeIngredient: merged
+    recipeIngredient: mergedIngredients,
+    recipeInstructions: mergedInstructions
   });
 
   if (patchResult.status >= 400) {
@@ -186,9 +183,12 @@ app.post('/push-ingredients', async (req, res) => {
     });
   }
 
-  res.json({ success: true, added: newIngredients.length });
+  res.json({
+    success: true,
+    ingredientsAdded: newIngredients.length,
+    instructionsAdded: newInstructions.length
+  });
 });
-
 
 app.listen(PORT, () => {
   console.log(`Mealie Ingredient Pusher running on http://localhost:${PORT}`);
