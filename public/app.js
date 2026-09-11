@@ -214,27 +214,39 @@ async function pushAll() {
     const existingIngredients = recipe.recipeIngredient || [];
 
     const newIngredients = parsed.map(p => ({
-      quantity: p.quantity || null,
+      quantity: p.quantity > 0 ? p.quantity : null,
       unit: p.unit ? { name: p.unit } : null,
       food: p.food ? { name: p.food } : null,
       note: '',
-      isFood: !!p.food,
-      disableAmount: !p.quantity,
-      display: p.display,
+      isFood: true,
+      disableAmount: !(p.quantity > 0),
+      display: p.display || '',
       title: null,
       referenceId: uuidv4()
     }));
 
-    // Step 3: PATCH recipe with combined ingredient list
+    // Step 3: PATCH only recipeIngredient field (avoid echoing back readonly fields)
     summary.textContent = 'Pushing ingredients…';
     pushBtn.textContent = 'Pushing…';
+
+    // Clean existing ingredients — strip any read-only computed fields Mealie rejects
+    const cleanExisting = existingIngredients.map(ing => ({
+      quantity: ing.quantity,
+      unit: ing.unit ? { id: ing.unit.id, name: ing.unit.name } : null,
+      food: ing.food ? { id: ing.food.id, name: ing.food.name } : null,
+      note: ing.note || '',
+      isFood: ing.isFood !== false,
+      disableAmount: ing.disableAmount || false,
+      display: ing.display || '',
+      title: ing.title || null,
+      referenceId: ing.referenceId || uuidv4()
+    }));
 
     const patchRes = await fetch(`/mealie-api/recipes/${slug}`, {
       method: 'PATCH',
       headers: getMealieHeaders(),
       body: JSON.stringify({
-        ...recipe,
-        recipeIngredient: [...existingIngredients, ...newIngredients]
+        recipeIngredient: [...cleanExisting, ...newIngredients]
       })
     });
 
