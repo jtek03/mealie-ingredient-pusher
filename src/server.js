@@ -71,3 +71,6 @@ app.use('/mealie-api', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Mealie Ingredient Pusher running on http://localhost:${PORT}`);
 });
+
+// Debug routes (safe to leave in — no auth bypass, just proxies to Mealie)
+require('./debug')(app);
