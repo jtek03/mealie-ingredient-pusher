@@ -139,24 +139,25 @@ app.post('/push-ingredients', async (req, res) => {
   try { recipe = JSON.parse(getResult.body); }
   catch (e) { return res.status(500).json({ error: 'Could not parse recipe response' }); }
 
-  // Resolve ingredients — handle section headers and regular ingredients
+  // Resolve ingredients — attach section title to the FIRST ingredient in each section
+  // Mealie renders the title field as a section header above that ingredient row,
+  // so we don't create a separate blank row for it.
   const newIngredients = [];
+  let pendingTitle = '';
   for (const p of ingredients) {
     if (p.isSection) {
-      newIngredients.push({
-        quantity: null, unit: null, food: null,
-        note: '', display: '', title: p.title,
-        originalText: null, referenceId: uuidv4(), referencedRecipe: null
-      });
+      pendingTitle = p.title;  // hold it, attach to next real ingredient
     } else {
       const food = p.food ? await resolveFood(mealieUrl, token, p.food) : null;
       const unit = p.unit ? await resolveUnit(mealieUrl, token, p.unit) : null;
       newIngredients.push({
         quantity: p.quantity > 0 ? p.quantity : null,
         unit: unit || null, food: food || null,
-        note: '', display: p.display || '', title: '',
+        note: '', display: p.display || '',
+        title: pendingTitle,  // attach section title to first ingredient, blank for rest
         originalText: p.display || '', referenceId: uuidv4(), referencedRecipe: null
       });
+      pendingTitle = '';  // clear after first use
     }
   }
 
