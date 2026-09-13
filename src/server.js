@@ -139,22 +139,25 @@ app.post('/push-ingredients', async (req, res) => {
   try { recipe = JSON.parse(getResult.body); }
   catch (e) { return res.status(500).json({ error: 'Could not parse recipe response' }); }
 
-  // Resolve ingredients — look up/create food & unit IDs
+  // Resolve ingredients — handle section headers and regular ingredients
   const newIngredients = [];
   for (const p of ingredients) {
-    const food = p.food ? await resolveFood(mealieUrl, token, p.food) : null;
-    const unit = p.unit ? await resolveUnit(mealieUrl, token, p.unit) : null;
-    newIngredients.push({
-      quantity: p.quantity > 0 ? p.quantity : null,
-      unit: unit || null,
-      food: food || null,
-      note: '',
-      display: p.display || '',
-      title: '',
-      originalText: p.display || '',
-      referenceId: uuidv4(),
-      referencedRecipe: null
-    });
+    if (p.isSection) {
+      newIngredients.push({
+        quantity: null, unit: null, food: null,
+        note: '', display: '', title: p.title,
+        originalText: null, referenceId: uuidv4(), referencedRecipe: null
+      });
+    } else {
+      const food = p.food ? await resolveFood(mealieUrl, token, p.food) : null;
+      const unit = p.unit ? await resolveUnit(mealieUrl, token, p.unit) : null;
+      newIngredients.push({
+        quantity: p.quantity > 0 ? p.quantity : null,
+        unit: unit || null, food: food || null,
+        note: '', display: p.display || '', title: '',
+        originalText: p.display || '', referenceId: uuidv4(), referencedRecipe: null
+      });
+    }
   }
 
   // Build instruction steps
