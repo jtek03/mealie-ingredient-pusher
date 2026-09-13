@@ -109,19 +109,9 @@ function parseAllIngredients() {
 }
 
 function parseAllInstructions() {
-  const lines = document.getElementById('raw-instructions').value
-    .split('\n').map(l => l.trim()).filter(Boolean);
-  const result = [];
-  let pendingTitle = '';
-  for (const line of lines) {
-    if (line.startsWith('#')) {
-      pendingTitle = line.replace(/^#+\s*/, '').trim();
-    } else {
-      result.push({ id: uuidv4(), title: pendingTitle, text: line, summary: '' });
-      pendingTitle = '';
-    }
-  }
-  return result;
+  return document.getElementById('raw-instructions').value
+    .split('\n').map(l => l.trim()).filter(Boolean)
+    .map(text => ({ id: uuidv4(), title: '', text, summary: '' }));
 }
 
 // ── Preview ───────────────────────────────────────────────────────────────────
