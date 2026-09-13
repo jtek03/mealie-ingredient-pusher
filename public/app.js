@@ -92,9 +92,20 @@ function parseIngredient(raw) {
 }
 
 function parseAllIngredients() {
-  return document.getElementById('raw-ingredients').value
-    .split('\n').map(l => l.trim()).filter(Boolean)
-    .map(parseIngredient).filter(Boolean);
+  const lines = document.getElementById('raw-ingredients').value
+    .split('\n').map(l => l.trim()).filter(Boolean);
+  
+  const result = [];
+  for (const line of lines) {
+    if (line.startsWith('#')) {
+      // Section header — push as a title-only ingredient
+      result.push({ isSection: true, title: line.replace(/^#+\s*/, '').trim(), display: line });
+    } else {
+      const parsed = parseIngredient(line);
+      if (parsed) result.push(parsed);
+    }
+  }
+  return result;
 }
 
 function parseAllInstructions() {
@@ -108,12 +119,17 @@ function previewParse() {
   const parsed = parseAllIngredients();
   const area = document.getElementById('preview-area');
   if (!parsed.length) { area.innerHTML = ''; return; }
-  const rows = parsed.map(p => `<tr>
-    <td>${esc(p.display)}</td>
-    <td>${p.quantity > 0 ? p.quantity : '<span style="color:var(--text-muted)">—</span>'}</td>
-    <td>${p.unit ? esc(p.unit) : '<span style="color:var(--text-muted)">—</span>'}</td>
-    <td class="food">${esc(p.food) || '⚠ check'}</td>
-  </tr>`).join('');
+  const rows = parsed.map(p => {
+    if (p.isSection) {
+      return `<tr><td colspan="4" style="font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);padding-top:10px">${esc(p.title)}</td></tr>`;
+    }
+    return `<tr>
+      <td>${esc(p.display)}</td>
+      <td>${p.quantity > 0 ? p.quantity : '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td>${p.unit ? esc(p.unit) : '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td class="food">${esc(p.food) || '⚠ check'}</td>
+    </tr>`;
+  }).join('');
   area.innerHTML = `
     <div class="preview-wrap"><table>
       <thead><tr><th>Original</th><th>Qty</th><th>Unit</th><th>Food</th></tr></thead>
