@@ -7,6 +7,20 @@ const { URL } = require('url');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Optional allowlist of Mealie hosts, e.g. ALLOWED_MEALIE_HOSTS=10.10.1.175:9925,mealie.example.com
+// When set, requests to any other host are refused, so this server cannot be used as an
+// open relay into the local network. When unset, behaviour is unchanged (any host).
+const ALLOWED_HOSTS = (process.env.ALLOWED_MEALIE_HOSTS || '')
+  .split(',').map(h => h.trim().toLowerCase()).filter(Boolean);
+if (!ALLOWED_HOSTS.length) {
+  console.warn('[warn] ALLOWED_MEALIE_HOSTS is not set: this server will forward requests to any host.');
+}
+function isAllowedTarget(u) {
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  if (!ALLOWED_HOSTS.length) return true;
+  return ALLOWED_HOSTS.includes(u.host.toLowerCase()) || ALLOWED_HOSTS.includes(u.hostname.toLowerCase());
+}
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
@@ -20,6 +34,9 @@ function uuidv4() {
 function mealieRequest(method, mealieBase, token, apiPath, body) {
   const fullUrl = `${mealieBase.replace(/\/$/, '')}/api${apiPath}`;
   const targetUrl = new URL(fullUrl);
+  if (!isAllowedTarget(targetUrl)) {
+    return Promise.resolve({ status: 0, body: 'Mealie host not allowed by ALLOWED_MEALIE_HOSTS' });
+  }
   const transport = targetUrl.protocol === 'https:' ? https : http;
   return new Promise((resolve) => {
     const data = body ? JSON.stringify(body) : null;
@@ -93,6 +110,9 @@ app.use('/mealie-api', (req, res) => {
   let targetUrl;
   try { targetUrl = new URL(fullUrl); }
   catch (e) { return res.status(400).json({ error: 'Invalid URL' }); }
+  if (!isAllowedTarget(targetUrl)) {
+    return res.status(403).json({ error: 'Mealie host not allowed by ALLOWED_MEALIE_HOSTS' });
+  }
 
   const transport = targetUrl.protocol === 'https:' ? https : http;
   const opts = {
@@ -131,7 +151,7 @@ app.post('/push-ingredients', async (req, res) => {
   // GET existing recipe
   const getResult = await mealieRequest('GET', mealieUrl, token, `/recipes/${slug}`, null);
   if (getResult.status !== 200) {
-    return res.status(getResult.status).json({
+    return res.status(getResult.status || 502).json({
       error: `Could not fetch recipe — HTTP ${getResult.status}. Check the slug is correct.`
     });
   }
@@ -181,7 +201,7 @@ app.post('/push-ingredients', async (req, res) => {
   });
 
   if (patchResult.status >= 400) {
-    return res.status(patchResult.status).json({
+    return res.status(patchResult.status || 502).json({
       error: `PATCH failed: HTTP ${patchResult.status}`,
       detail: patchResult.body.slice(0, 500)
     });

@@ -18,7 +18,7 @@ A simple self-hosted web app that bulk-pushes ingredients to a [Mealie](https://
 ```yaml
 services:
   mealie-ingredient-pusher:
-    image: ghcr.io/jlora/mealie-ingredient-pusher:latest
+    image: ghcr.io/jtek03/mealie-ingredient-pusher:latest
     ports:
       - "3000:3000"
     restart: unless-stopped
@@ -27,18 +27,28 @@ services:
 ### Option 2 — Unraid Community Apps / Template
 
 Add a custom template pointing to:
-- **Repository:** `ghcr.io/jlora/mealie-ingredient-pusher:latest`
+- **Repository:** `ghcr.io/jtek03/mealie-ingredient-pusher:latest`
 - **Port:** `3000`
 
 ### Option 3 — Build locally
 
 ```bash
-git clone https://github.com/jlora/mealie-ingredient-pusher
+git clone https://github.com/jtek03/mealie-ingredient-pusher
 cd mealie-ingredient-pusher
 docker compose up -d
 ```
 
 Open http://localhost:3000
+
+## Restricting which Mealie host it will talk to
+
+The server forwards requests to whatever Mealie URL it is given. If it can be reached by anyone you do not trust, set an allowlist so it cannot be used as a relay into your network:
+
+```
+ALLOWED_MEALIE_HOSTS=10.10.1.175:9925,mealie.example.com
+```
+
+Entries are `host` or `host:port`. Any other host is refused. Without this variable the server allows any host and logs a warning at startup.
 
 ## Usage
 
